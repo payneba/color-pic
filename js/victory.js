@@ -19,8 +19,12 @@ export const Victory = {
     Bus.on('game:complete', (data) => this.show(data));
 
     // Button handlers
+    const viewBtn = document.getElementById('victoryViewBtn');
     const newBtn = document.getElementById('victoryNewBtn');
     const shareBtn = document.getElementById('victoryShareBtn');
+    if (viewBtn) {
+      viewBtn.addEventListener('click', () => this.hide());
+    }
     if (newBtn) {
       newBtn.addEventListener('click', () => {
         this.hide();
