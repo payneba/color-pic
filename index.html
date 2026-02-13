@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Color Pic - Paint by Numbers</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Color Pic</h1>
+      <div class="header-controls">
+        <button class="header-btn" id="darkModeBtn" title="Toggle dark mode (D)">Light</button>
+        <button class="header-btn" id="soundBtn" title="Toggle sound">Sound: On</button>
+        <button class="header-btn" id="helpBtn" title="Keyboard shortcuts (?)">?</button>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- Loader Screen -->
+      <div id="loaderScreen" class="loader-screen">
+        <div class="image-loader">
+          <h2>Load an Image</h2>
+
+          <!-- Gallery -->
+          <div class="gallery-section" id="gallerySection">
+            <h3>Choose a Design</h3>
+            <div class="gallery-strip" id="galleryStrip"></div>
+          </div>
+
+          <!-- Continue from save -->
+          <div class="loader-section hidden" id="continueSection">
+            <button class="browse-button" id="continueBtn" style="width:100%">Continue Saved Game</button>
+          </div>
+
+          <!-- File upload -->
+          <div class="loader-section">
+            <h3>From File</h3>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            <button class="browse-button" id="browseBtn">Browse...</button>
+            <span style="margin-left: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">or paste / drag-drop</span>
+          </div>
+
+          <!-- URL loading -->
+          <div class="loader-section">
+            <h3>From URL</h3>
+            <form class="url-form" id="urlForm">
+              <input type="text" class="url-input" id="urlInput" placeholder="https://example.com/image.jpg">
+              <button type="submit">Load</button>
+            </form>
+            <p class="cors-note">Note: Some URLs may not work due to CORS restrictions.</p>
+          </div>
+
+          <!-- Settings -->
+          <div class="loader-section">
+            <h3>Settings</h3>
+            <div class="settings-row">
+              <label for="gridSizeInput">Grid Size:</label>
+              <input type="range" id="gridSizeInput" min="500" max="65536" value="2500" step="500">
+              <span id="gridSizeValue">2,500 cells</span>
+            </div>
+            <div class="settings-row">
+              <label for="numColorsInput">Colors:</label>
+              <input type="range" id="numColorsInput" min="4" max="64" value="16" step="1">
+              <span id="numColorsValue">16</span>
+            </div>
+          </div>
+
+          <div id="processingIndicator" class="processing-indicator hidden">
+            Processing image...
+          </div>
+
+          <div id="errorMessage" class="error-message hidden"></div>
+
+          <div id="previewSection" class="preview-section hidden">
+            <h3>Preview</h3>
+            <img id="previewImage" class="preview-image" alt="Preview">
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Screen -->
+      <div id="gameScreen" class="game-screen hidden">
+        <aside class="sidebar">
+          <!-- Palette -->
+          <div class="sidebar-section">
+            <h3>Colors</h3>
+            <div class="palette-grid" id="paletteGrid"></div>
+            <div class="selected-indicator" id="selectedIndicator" style="display: none;">
+              <span class="selected-preview" id="selectedPreview"></span>
+              <span class="selected-text">Color 1</span>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div class="sidebar-section">
+            <h3>Progress</h3>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <span class="progress-text" id="progressText">0.0% Complete</span>
+          </div>
+
+          <!-- Streak -->
+          <div class="sidebar-section">
+            <div class="streak-display" id="streakDisplay"></div>
+          </div>
+
+          <!-- Power-ups -->
+          <div class="sidebar-section" id="powerupSection" style="display:none;">
+            <h3>Power-Ups</h3>
+            <div class="powerup-toolbar" id="powerupToolbar"></div>
+          </div>
+
+          <!-- Zoom -->
+          <div class="sidebar-section">
+            <h3>View</h3>
+            <div class="zoom-controls">
+              <button class="zoom-btn" id="zoomOutBtn" title="Zoom out (-)">-</button>
+              <span class="zoom-text" id="zoomText">100%</span>
+              <button class="zoom-btn" id="zoomInBtn" title="Zoom in (+)">+</button>
+              <button class="zoom-btn" id="zoomFitBtn" title="Fit to view (F)">Fit</button>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="sidebar-section">
+            <div class="button-group">
+              <button class="control-button" id="hintBtn">Show Hint</button>
+              <button class="control-button" id="undoBtn">Undo (Ctrl+Z)</button>
+              <button class="control-button" id="redoBtn">Redo (Ctrl+Y)</button>
+              <button class="control-button" id="saveBtn">Save (Ctrl+S)</button>
+              <button class="control-button" id="resetBtn">Reset</button>
+              <button class="control-button" id="newImageBtn">New Image</button>
+            </div>
+          </div>
+        </aside>
+
+        <div class="canvas-area" id="canvasArea">
+          <canvas id="gameCanvas"></canvas>
+          <div class="minimap-container hidden" id="minimapContainer">
+            <canvas id="minimapCanvas" width="150" height="150"></canvas>
+          </div>
+          <canvas id="confettiCanvas" style="display:none;"></canvas>
+          <div class="victory-overlay" id="victoryOverlay">
+            <div class="victory-card">
+              <h2>Puzzle Complete!</h2>
+              <div class="victory-stats" id="victoryStats"></div>
+              <div class="victory-buttons">
+                <button class="victory-btn victory-btn-primary" id="victoryNewBtn">Play Again</button>
+                <button class="victory-btn victory-btn-secondary" id="victoryShareBtn">Copy Stats</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Help Modal -->
+  <div class="modal-overlay" id="helpModal">
+    <div class="modal">
+      <button class="modal-close" id="helpCloseBtn">&times;</button>
+      <h2>Keyboard Shortcuts</h2>
+      <div class="help-grid">
+        <span class="help-key">1-9, 0</span><span>Select color 1-10</span>
+        <span class="help-key">Shift+1-0</span><span>Select color 11-20</span>
+        <span class="help-key">Ctrl+Z</span><span>Undo</span>
+        <span class="help-key">Ctrl+Y</span><span>Redo</span>
+        <span class="help-key">Ctrl+S</span><span>Save game</span>
+        <span class="help-key">Space</span><span>Hold to pan</span>
+        <span class="help-key">Scroll</span><span>Zoom in/out</span>
+        <span class="help-key">+ / -</span><span>Zoom in/out</span>
+        <span class="help-key">F</span><span>Fit to view</span>
+        <span class="help-key">H</span><span>Toggle hint</span>
+        <span class="help-key">M</span><span>Toggle mini-map</span>
+        <span class="help-key">D</span><span>Toggle dark mode</span>
+        <span class="help-key">?</span><span>This help</span>
+      </div>
+      <h3 style="margin-top:1rem;">Touch Controls</h3>
+      <div class="help-grid">
+        <span class="help-key">1 finger</span><span>Paint (tap or drag)</span>
+        <span class="help-key">Pinch</span><span>Zoom</span>
+        <span class="help-key">2 fingers</span><span>Pan</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { boot } from './js/game.js';
+    boot();
+  </script>
+</body>
+</html>
