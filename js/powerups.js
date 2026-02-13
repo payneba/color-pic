@@ -11,21 +11,22 @@ const powerups = {
   reveal: { name: 'Reveal', icon: 'eye', charges: 1, description: 'Hover shows correct colors in 5x5 radius (10s)' },
   bomb: { name: 'Bomb', icon: 'boom', charges: 0, description: 'Fill matching cells within radius 5' },
   autofill: { name: 'Auto-Fill', icon: 'fill', charges: 0, description: 'Fill ALL remaining cells of selected color' },
-  freeze: { name: 'Freeze', icon: 'ice', charges: 1, description: 'Highlights matching cells for 15s' },
+  flood: { name: 'Flood', icon: 'drop', charges: 1, description: 'Fill connected region of matching color' },
   slowReveal: { name: 'Preview', icon: 'play', charges: 1, description: 'Cinematic preview of solution' },
 };
 
 let streak = 0;
 let revealActive = false;
 let revealTimer = null;
-let freezeActive = false;
-let freezeTimer = null;
-let freezeColorIndex = -1;
 let slowRevealActive = false;
 let slowRevealCancel = false;
 let toolbarEl = null;
 let sectionEl = null;
 let streakEl = null;
+
+// Super streak tracking: detect completing all remaining cells of a color in one streak
+let streakStartRemaining = null; // Uint32Array snapshot when streak began
+let powerUpColorCounts = null;   // Uint32Array — cells painted by power-ups per color (game-wide)
 
 export const PowerUps = {
   init(toolbarElement, sectionElement, streakElement) {
@@ -35,7 +36,7 @@ export const PowerUps = {
 
     Bus.on('state:init', () => this.reset());
     Bus.on('state:reset', () => this.reset());
-    Bus.on('cell:painted', () => this.onCellPainted());
+    Bus.on('cell:painted', ({ colorIndex }) => this.onCellPainted(colorIndex));
     Bus.on('cell:wrong', () => this.onCellWrong());
     Bus.on('progress:milestone', ({ percent }) => this.onMilestone(percent));
     Bus.on('powerup:click', ({ row, col }) => this.onPowerupClick(row, col));
@@ -46,12 +47,13 @@ export const PowerUps = {
     powerups.reveal.charges = 1;
     powerups.bomb.charges = 0;
     powerups.autofill.charges = 0;
-    powerups.freeze.charges = 1;
+    powerups.flood.charges = 1;
     powerups.slowReveal.charges = 1;
     streak = 0;
     revealActive = false;
-    freezeActive = false;
     slowRevealActive = false;
+    streakStartRemaining = null;
+    powerUpColorCounts = new Uint32Array(State.palette.length);
     State.activePowerUp = null;
 
     this.buildToolbar();
@@ -119,8 +121,9 @@ export const PowerUps = {
       case 'autofill':
         this.activateAutoFill();
         break;
-      case 'freeze':
-        this.activateFreeze();
+      case 'flood':
+        State.activePowerUp = 'flood';
+        UI.toast('Click a cell to flood-fill its connected region!', 'info');
         break;
       case 'slowReveal':
         this.activateSlowReveal();
@@ -132,9 +135,7 @@ export const PowerUps = {
 
   deactivateAll() {
     if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
-    if (freezeTimer) { clearTimeout(freezeTimer); freezeTimer = null; }
     revealActive = false;
-    freezeActive = false;
     slowRevealCancel = true;
     State.activePowerUp = null;
     Renderer.clearOverlay();
@@ -178,6 +179,8 @@ export const PowerUps = {
   onPowerupClick(row, col) {
     if (State.activePowerUp === 'bomb') {
       this.executeBomb(row, col);
+    } else if (State.activePowerUp === 'flood') {
+      this.executeFlood(row, col);
     }
   },
 
@@ -210,6 +213,7 @@ export const PowerUps = {
     if (undoCells.length > 0) {
       Undo.pushBatch(undoCells);
       Bus.emit('cells:batch-changed', { indices: changedIndices });
+      powerUpColorCounts[State.selectedColorIndex] += undoCells.length;
       UI.toast(`Bomb filled ${undoCells.length} cells!`, 'success');
     } else {
       UI.toast('No matching cells in range', 'info');
@@ -218,6 +222,121 @@ export const PowerUps = {
 
     State.activePowerUp = null;
     this.updateToolbar();
+  },
+
+  // Flood Fill: BFS from clicked cell, fill connected region of same target color
+  executeFlood(row, col) {
+    const idx = State.cellIndex(row, col);
+    if (State.currentColors[idx] !== -1) {
+      UI.toast('Cell already painted', 'info');
+      return;
+    }
+
+    const targetColor = State.targetColors[idx];
+    powerups.flood.charges--;
+
+    // BFS to find connected region of same target color (unpainted only)
+    const w = State.gridWidth;
+    const h = State.gridHeight;
+    const visited = new Uint8Array(State.totalCells);
+    const queue = [idx];
+    visited[idx] = 1;
+
+    // Collect cells with their BFS distance for ripple animation
+    const rings = [[idx]]; // rings[0] = origin, rings[1] = distance 1, etc.
+    let currentRing = 0;
+    let nextRingStart = 1;
+
+    const allCells = [idx];
+
+    while (queue.length > 0) {
+      const nextQueue = [];
+      for (const ci of queue) {
+        const c = ci % w;
+        const r = (ci - c) / w;
+        // 4-directional neighbors
+        const neighbors = [];
+        if (r > 0) neighbors.push(ci - w);
+        if (r < h - 1) neighbors.push(ci + w);
+        if (c > 0) neighbors.push(ci - 1);
+        if (c < w - 1) neighbors.push(ci + 1);
+
+        for (const ni of neighbors) {
+          if (visited[ni]) continue;
+          if (State.currentColors[ni] !== -1) continue;
+          if (State.targetColors[ni] !== targetColor) continue;
+          visited[ni] = 1;
+          nextQueue.push(ni);
+          allCells.push(ni);
+        }
+      }
+      if (nextQueue.length > 0) {
+        rings.push(nextQueue);
+      }
+      queue.length = 0;
+      queue.push(...nextQueue);
+    }
+
+    if (allCells.length === 0) {
+      powerups.flood.charges++; // refund
+      UI.toast('No connected cells to fill', 'info');
+      State.activePowerUp = null;
+      this.updateToolbar();
+      return;
+    }
+
+    // Animate ring-by-ring, then commit all as one undo batch
+    const undoCells = [];
+    const changedIndices = [];
+    let ringIdx = 0;
+
+    const animateRing = () => {
+      if (ringIdx >= rings.length) {
+        // All rings done — commit undo batch
+        Undo.pushBatch(undoCells);
+        Renderer.clearOverlay();
+        powerUpColorCounts[targetColor] += undoCells.length;
+        State.activePowerUp = null;
+        this.updateToolbar();
+        UI.toast(`Flood filled ${undoCells.length} cells!`, 'success');
+        return;
+      }
+
+      const ring = rings[ringIdx];
+      for (const ci of ring) {
+        const c = ci % w;
+        const r = (ci - c) / w;
+        undoCells.push({ row: r, col: c, prev: -1, next: targetColor });
+        State.setCellColor(r, c, targetColor);
+        changedIndices.push(ci);
+      }
+      Bus.emit('cells:batch-changed', { indices: changedIndices.slice(-ring.length) });
+
+      // Show remaining rings as overlay for preview effect
+      const previewCells = [];
+      for (let ri = ringIdx + 1; ri < rings.length; ri++) {
+        for (const ci of rings[ri]) {
+          const c = ci % w;
+          const r = (ci - c) / w;
+          previewCells.push({ row: r, col: c, colorIndex: targetColor });
+        }
+      }
+      Renderer.showOverlay(previewCells, 'pulse');
+
+      ringIdx++;
+      // Speed scales with total rings — keep total animation under ~2 seconds
+      const delay = Math.max(16, Math.min(100, 2000 / rings.length));
+      setTimeout(animateRing, delay);
+    };
+
+    // Show preview of entire region first, then start filling
+    const previewCells = allCells.map(ci => {
+      const c = ci % w;
+      const r = (ci - c) / w;
+      return { row: r, col: c, colorIndex: targetColor };
+    });
+    Renderer.showOverlay(previewCells, 'pulse');
+    setTimeout(animateRing, 300);
   },
 
   // Auto-Fill: fill ALL remaining cells of selected color
@@ -245,6 +364,7 @@ export const PowerUps = {
     if (undoCells.length > 0) {
       Undo.pushBatch(undoCells);
       Bus.emit('cells:batch-changed', { indices: changedIndices });
+      powerUpColorCounts[colorIdx] += undoCells.length;
       UI.toast(`Auto-filled ${undoCells.length} cells!`, 'success');
     } else {
       UI.toast('No remaining cells of this color', 'info');
@@ -253,40 +373,6 @@ export const PowerUps = {
 
     State.activePowerUp = null;
     this.updateToolbar();
-  },
-
-  // Color Freeze: highlight matching cells
-  activateFreeze() {
-    if (State.selectedColorIndex === -1) {
-      UI.toast('Select a color first!', 'warning');
-      return;
-    }
-
-    powerups.freeze.charges--;
-    freezeActive = true;
-    freezeColorIndex = State.selectedColorIndex;
-    State.activePowerUp = 'freeze';
-
-    // Highlight all cells of this color
-    const cells = [];
-    for (let i = 0; i < State.totalCells; i++) {
-      if (State.currentColors[i] === -1 && State.targetColors[i] === freezeColorIndex) {
-        const col = i % State.gridWidth;
-        const row = (i - col) / State.gridWidth;
-        cells.push({ row, col, colorIndex: freezeColorIndex });
-      }
-    }
-    Renderer.showOverlay(cells, 'pulse');
-
-    UI.toast(`Freeze active! Matching cells highlighted (15s)`, 'info');
-
-    freezeTimer = setTimeout(() => {
-      freezeActive = false;
-      State.activePowerUp = null;
-      Renderer.clearOverlay();
-      this.updateToolbar();
-      UI.toast('Freeze expired', 'info');
-    }, CONFIG.FREEZE_DURATION);
   },
 
   // Slow Reveal: cinematic preview
@@ -338,7 +424,15 @@ export const PowerUps = {
   },
 
   // Streak tracking
-  onCellPainted() {
+  onCellPainted(colorIndex) {
+    // Snapshot remaining counts when streak begins
+    if (streak === 0) {
+      streakStartRemaining = State.getRemainingCounts();
+      // The cell that just triggered this event is already painted,
+      // so add 1 back to get the count at moment before this paint
+      streakStartRemaining[colorIndex]++;
+    }
+
     streak++;
     this.updateStreak();
 
@@ -347,26 +441,50 @@ export const PowerUps = {
       UI.toast('Streak bonus! +1 Reveal charge!', 'success');
       this.updateToolbar();
     }
+
+    // Super streak: check if we just completed all cells of this color.
+    // Qualifies if every non-power-up cell of this color was painted in this streak.
+    // Power-up painted cells don't count against you.
+    if (streakStartRemaining && streakStartRemaining[colorIndex] > 0) {
+      const remaining = State.getRemainingCounts();
+      if (remaining[colorIndex] === 0) {
+        // Count total cells of this color in the image
+        let totalOfColor = 0;
+        for (let i = 0; i < State.totalCells; i++) {
+          if (State.targetColors[i] === colorIndex) totalOfColor++;
+        }
+        // Cells painted before this streak = total - remaining at streak start
+        // These must all be accounted for by power-ups
+        const paintedBeforeStreak = totalOfColor - streakStartRemaining[colorIndex];
+        const puCount = powerUpColorCounts ? powerUpColorCounts[colorIndex] : 0;
+        if (paintedBeforeStreak <= puCount) {
+          powerups.flood.charges++;
+          this.updateToolbar();
+          UI.toast(`Full color streak! +1 Flood charge!`, 'success');
+        }
+      }
+    }
   },
 
   onCellWrong() {
     streak = 0;
+    streakStartRemaining = null;
     this.updateStreak();
   },
 
   updateStreak() {
     if (!streakEl) return;
     if (streak === 0) {
-      streakEl.textContent = '';
+      streakEl.textContent = '\u00A0';
       streakEl.className = 'streak-display';
       return;
     }
 
     if (streak >= CONFIG.STREAK_SPARKLE_THRESHOLD) {
-      streakEl.textContent = `Streak: ${streak} ✨`;
+      streakEl.textContent = `Streak: ${streak} \u2728`;
       streakEl.className = 'streak-display sparkle';
     } else if (streak >= CONFIG.STREAK_FLAME_THRESHOLD) {
-      streakEl.textContent = `Streak: ${streak} 🔥`;
+      streakEl.textContent = `Streak: ${streak} \uD83D\uDD25`;
       streakEl.className = 'streak-display flame';
     } else {
       streakEl.textContent = `Streak: ${streak}`;
@@ -393,9 +511,10 @@ export const PowerUps = {
       UI.toast('+1 Auto-Fill charge!', 'success');
     }
 
-    // Freeze: +1 per 15%
-    if (percent % 15 === 0) {
-      powerups.freeze.charges++;
+    // Flood: +1 per 25%
+    if (percent % 25 === 0) {
+      powerups.flood.charges++;
+      UI.toast('+1 Flood charge!', 'success');
     }
 
     // Slow Reveal: +1 at 25%

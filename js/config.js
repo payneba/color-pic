@@ -38,7 +38,6 @@ export const CONFIG = {
   REVEAL_RADIUS: 5,
   REVEAL_DURATION: 10000,     // ms
   BOMB_RADIUS: 5,
-  FREEZE_DURATION: 15000,     // ms
   SLOW_REVEAL_DURATION: 7000, // ms
 
   // Victory

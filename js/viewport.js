@@ -71,24 +71,26 @@ export const Viewport = {
     const gridW = this.gridPixelWidth * this.zoom;
     const gridH = this.gridPixelHeight * this.zoom;
 
-    // Allow panning so at least 10% of grid is visible
-    const margin = 0.1;
-    const minX = this.canvasWidth - gridW * (1 - margin);
-    const maxX = gridW * margin - gridW + this.canvasWidth;
-    const minY = this.canvasHeight - gridH * (1 - margin);
-    const maxY = gridH * margin - gridH + this.canvasHeight;
+    // Small absolute margin so grid edge doesn't fully leave the canvas
+    const margin = 50;
 
     if (gridW <= this.canvasWidth) {
       // Grid fits — center it
       this.panX = (this.canvasWidth - gridW) / 2;
     } else {
-      this.panX = clamp(this.panX, Math.min(minX, maxX), Math.max(minX, maxX));
+      // min: can drag left until grid right edge is 'margin' px from canvas left
+      const minX = -(gridW - margin);
+      // max: can drag right until grid left edge is 'margin' px from canvas right
+      const maxX = this.canvasWidth - margin;
+      this.panX = clamp(this.panX, minX, maxX);
     }
 
     if (gridH <= this.canvasHeight) {
       this.panY = (this.canvasHeight - gridH) / 2;
     } else {
-      this.panY = clamp(this.panY, Math.min(minY, maxY), Math.max(minY, maxY));
+      const minY = -(gridH - margin);
+      const maxY = this.canvasHeight - margin;
+      this.panY = clamp(this.panY, minY, maxY);
     }
   },
 
