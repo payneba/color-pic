@@ -182,16 +182,22 @@ export const Input = {
 
     // Keyboard shortcuts
     if (e.ctrlKey || e.metaKey) {
-      if (e.key === 'z' || e.key === 'Z') {
-        if (e.shiftKey) Bus.emit('action:redo');
-        else Bus.emit('action:undo');
+      if (e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        Bus.emit('action:toggleCheatMode');
         e.preventDefault();
-      } else if (e.key === 'y' || e.key === 'Y') {
-        Bus.emit('action:redo');
-        e.preventDefault();
-      } else if (e.key === 's' || e.key === 'S') {
-        Bus.emit('action:save');
-        e.preventDefault();
+        return;
+      }
+      if (window._cheatMode) {
+        if (e.key === 'z' || e.key === 'Z') {
+          Bus.emit('action:undo');
+          e.preventDefault();
+        } else if (e.key === 'y' || e.key === 'Y') {
+          Bus.emit('action:redo');
+          e.preventDefault();
+        } else if (e.key === 's' || e.key === 'S') {
+          Bus.emit('action:save');
+          e.preventDefault();
+        }
       }
     }
 
@@ -207,7 +213,7 @@ export const Input = {
         e.preventDefault();
       }
     } else if (e.key === 'h' || e.key === 'H') {
-      if (!e.ctrlKey && !e.metaKey) {
+      if (!e.ctrlKey && !e.metaKey && window._cheatMode) {
         Bus.emit('action:toggleHint');
         e.preventDefault();
       }

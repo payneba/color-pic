@@ -25,7 +25,9 @@ let fileInput, browseBtn, urlForm, urlInput;
 let gridSizeInput, gridSizeValue, numColorsInput, numColorsValue;
 let processingIndicator, errorMessage, previewSection, previewImage;
 let hintBtn, resetBtn, newImageBtn;
+let undoBtn, redoBtn, saveBtn;
 let zoomInBtn, zoomOutBtn, zoomFitBtn, zoomText;
+let cheatMode = false;
 
 function showError(msg) {
   errorMessage.textContent = 'Error: ' + msg;
@@ -134,6 +136,14 @@ function updateZoomText() {
 }
 
 let showingSolution = false;
+
+function toggleCheatMode() {
+  cheatMode = !cheatMode;
+  window._cheatMode = cheatMode;
+  const btns = [hintBtn, undoBtn, redoBtn, saveBtn];
+  btns.forEach(btn => { if (btn) btn.hidden = !cheatMode; });
+  UI.toast(cheatMode ? 'Cheat mode ON' : 'Cheat mode OFF', 'info');
+}
 
 function toggleHint() {
   showingSolution = !showingSolution;
@@ -287,9 +297,9 @@ export function boot() {
   newImageBtn.addEventListener('click', newImage);
 
   // Undo/Redo/Save buttons
-  const undoBtn = document.getElementById('undoBtn');
-  const redoBtn = document.getElementById('redoBtn');
-  const saveBtn = document.getElementById('saveBtn');
+  undoBtn = document.getElementById('undoBtn');
+  redoBtn = document.getElementById('redoBtn');
+  saveBtn = document.getElementById('saveBtn');
   if (undoBtn) undoBtn.addEventListener('click', () => Bus.emit('action:undo'));
   if (redoBtn) redoBtn.addEventListener('click', () => Bus.emit('action:redo'));
   if (saveBtn) saveBtn.addEventListener('click', () => Bus.emit('action:save'));
@@ -379,6 +389,7 @@ export function boot() {
 
   Bus.on('viewport:changed', updateZoomText);
   Bus.on('action:toggleHint', toggleHint);
+  Bus.on('action:toggleCheatMode', toggleCheatMode);
 
   // Canvas resize on window resize
   let resizeTimeout;
