@@ -224,10 +224,10 @@ export const Renderer = {
       ctx.stroke();
     }
 
-    // Number labels (only above minimum zoom and when cells are large enough)
-    if (!showingSolution && vp.zoom >= CONFIG.LABEL_MIN_ZOOM && cellSizeZ >= 12) {
+    // Number labels (always shown on unpainted cells)
+    if (!showingSolution) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      const fontSize = Math.max(8, Math.min(14, cellSizeZ * 0.45));
+      const fontSize = Math.max(4, Math.min(14, cellSizeZ * 0.45));
       ctx.font = `${fontSize}px Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
