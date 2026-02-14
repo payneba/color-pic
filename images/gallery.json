@@ -1,0 +1,15 @@
+[
+  {
+    "file": "valentine_otter_2026_full.png",
+    "name": "Valentine Otter",
+    "colors": 32,
+    "cells": 10000
+  },
+  {
+    "file": "posterized_vday_full.png",
+    "name": "Valentine Card",
+    "colors": 24,
+    "cells": 22500,
+    "default": true
+  }
+]

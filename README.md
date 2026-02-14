@@ -7,12 +7,14 @@ A full-featured paint-by-numbers web application. Load any image or choose from 
 - **Paint by Numbers**: Click or drag to paint cells with the selected color. Only correct colors are accepted.
 - **Image Loading**: Upload from file, paste from clipboard, drag-and-drop, or load from URL.
 - **Procedural Gallery**: 8 built-in designs (Sunset, Mandala, Castle, Spiral, Mosaic, Floral, Ocean, Stained Glass) generated programmatically.
+- **User Image Gallery**: Drop `.jpg`, `.png`, or `.heic` files into the `images/` folder and they appear in the gallery automatically. Use `images/gallery.json` to set preferred colors/resolution per image and flag a default for auto-load on startup.
+- **Perceptual Quantization**: Oklab color space with variance-weighted median-cut and k-means refinement for accurate color reduction, especially on photographic images.
 - **Zoom & Pan**: Scroll-wheel zoom centered on cursor, spacebar+drag or middle-mouse to pan. Supports grids up to 256x256 cells.
 - **Touch Support**: Single-finger paint, pinch-to-zoom, two-finger pan.
 - **Mini-Map**: Overview with viewport rectangle, click to navigate. Auto-shows at high zoom levels.
 - **Undo/Redo**: Full undo stack with batch support for drag strokes and power-up operations (Ctrl+Z / Ctrl+Y).
 - **Save/Load**: Auto-saves to localStorage every 30 seconds. Continue button on reload.
-- **Power-Ups**: Earn charges through milestones — Reveal Lens, Color Bomb, Auto-Fill, Color Freeze, Slow Reveal, and passive Streak Bonus.
+- **Power-Ups**: Earn charges through milestones — Reveal Lens, Color Bomb, Auto-Fill, Flood Fill, and passive Streak Bonus.
 - **Sound Effects**: Procedural Web Audio synthesis (toggle on/off).
 - **Dark Mode**: Respects system preference, toggle with D key or header button.
 - **Victory Celebration**: Confetti particle system with stats overlay and clipboard sharing.
@@ -39,13 +41,15 @@ Multi-file vanilla JavaScript with ES module imports. No frameworks or build too
 color_pic/
 ├── index.html          # Shell HTML, screen layouts, modals
 ├── css/style.css       # Styles with CSS custom properties, dark mode, responsive
+├── images/             # Drop .jpg/.png/.heic files here for gallery
+│   └── gallery.json    # Optional manifest: per-image settings + default
 ├── js/
 │   ├── config.js       # Constants and tuning parameters
 │   ├── bus.js          # Lightweight pub/sub event bus
 │   ├── state.js        # Central state with typed arrays
 │   ├── utils.js        # Color math, Bresenham, PRNG, HSL conversion
-│   ├── quantize.js     # Median-cut color quantization
-│   ├── gallery.js      # 8 procedural image generators
+│   ├── quantize.js     # Oklab perceptual quantization + k-means
+│   ├── gallery.js      # Procedural generators + user image gallery
 │   ├── viewport.js     # Zoom, pan, coordinate transforms
 │   ├── renderer.js     # Canvas rendering with dirty tracking
 │   ├── minimap.js      # Mini-map overlay

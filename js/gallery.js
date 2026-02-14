@@ -1,6 +1,8 @@
-// gallery.js — 8 procedural image generators + gallery UI
+// gallery.js — 8 procedural image generators + user image gallery UI
 
 import { PRNG, hslToRgb, clamp } from './utils.js';
+
+const USER_IMAGE_EXTENSIONS = /\.(jpe?g|png|heic)$/i;
 
 const GENERATORS = [
   {
@@ -405,6 +407,80 @@ function generateThumbnail(gen, thumbW, thumbH) {
   return canvas;
 }
 
+// Load manifest from images/gallery.json (optional)
+async function loadManifest() {
+  try {
+    const response = await fetch('images/gallery.json');
+    if (!response.ok) return [];
+    return await response.json();
+  } catch {
+    return [];
+  }
+}
+
+// Discover images in /images/ via directory listing, merged with manifest
+async function discoverUserImages() {
+  const [manifest, dirImages] = await Promise.all([
+    loadManifest(),
+    discoverFromDirectory()
+  ]);
+
+  // Start with manifest entries (preserves manifest ordering)
+  const result = [];
+  const seen = new Set();
+  for (const entry of manifest) {
+    if (!entry.file) continue;
+    seen.add(entry.file);
+    result.push({
+      url: 'images/' + entry.file,
+      name: entry.name || entry.file.replace(/\.[^.]+$/, ''),
+      colors: entry.colors || null,
+      cells: entry.cells || null,
+      isDefault: !!entry.default,
+    });
+  }
+
+  // Append any directory images not in the manifest
+  for (const img of dirImages) {
+    const filename = img.url.replace(/^images\//, '');
+    if (!seen.has(filename)) {
+      result.push(img);
+    }
+  }
+
+  return result;
+}
+
+// Discover images from directory listing only
+async function discoverFromDirectory() {
+  try {
+    const response = await fetch('images/');
+    if (!response.ok) return [];
+
+    const html = await response.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const links = doc.querySelectorAll('a');
+
+    const images = [];
+    for (const link of links) {
+      const href = link.getAttribute('href');
+      if (href && USER_IMAGE_EXTENSIONS.test(href)) {
+        images.push({
+          url: 'images/' + href,
+          name: decodeURIComponent(href).replace(/\.[^.]+$/, ''),
+          colors: null,
+          cells: null,
+          isDefault: false,
+        });
+      }
+    }
+
+    return images;
+  } catch {
+    return [];
+  }
+}
+
 export const Gallery = {
   init(stripEl) {
     if (!stripEl) return;
@@ -436,16 +512,69 @@ export const Gallery = {
 
       stripEl.appendChild(item);
     }
+
+    // Async: discover and append user images from /images/
+    this._loadUserImages(stripEl, thumbW, thumbH);
+  },
+
+  async _loadUserImages(stripEl, thumbW, thumbH) {
+    const userImages = await discoverUserImages();
+    if (userImages.length === 0) return;
+
+    // Visual separator between procedural and user images
+    const sep = document.createElement('div');
+    sep.className = 'gallery-separator';
+    stripEl.appendChild(sep);
+
+    let defaultImage = null;
+
+    for (const info of userImages) {
+      const item = document.createElement('div');
+      item.className = 'gallery-item';
+
+      const img = document.createElement('img');
+      img.src = info.url;
+      img.width = thumbW;
+      img.height = thumbH;
+      img.alt = info.name;
+      img.loading = 'lazy';
+      img.onerror = () => { item.style.display = 'none'; };
+      item.appendChild(img);
+
+      const label = document.createElement('div');
+      label.className = 'gallery-label';
+      label.textContent = info.name;
+      item.appendChild(label);
+
+      // Build settings override (only include non-null values)
+      const settings = {};
+      if (info.colors) settings.colors = info.colors;
+      if (info.cells) settings.cells = info.cells;
+      const hasSettings = Object.keys(settings).length > 0;
+
+      item.addEventListener('click', () => {
+        if (window._processImage) {
+          window._processImage(info.url, hasSettings ? settings : undefined);
+        }
+      });
+
+      stripEl.appendChild(item);
+
+      if (info.isDefault) defaultImage = { url: info.url, settings: hasSettings ? settings : undefined };
+    }
+
+    // Auto-load default image if one is flagged and no auto-save is pending
+    if (defaultImage && window._loadDefaultImage) {
+      window._loadDefaultImage(defaultImage.url, defaultImage.settings);
+    }
   },
 
   loadGalleryImage(index) {
     const gen = GENERATORS[index];
-    // Generate at a reasonable resolution for quantization
     const genW = 200;
     const genH = 150;
     const imageData = gen.generate(genW, genH);
 
-    // Use the global processImage function with ImageData
     if (window._processImage) {
       window._processImage(imageData);
     }

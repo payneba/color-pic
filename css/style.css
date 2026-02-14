@@ -186,11 +186,20 @@ body {
   transform: translateY(-2px);
 }
 
-.gallery-item canvas {
+.gallery-item canvas,
+.gallery-item img {
   display: block;
   width: 110px;
   height: 80px;
   object-fit: cover;
+}
+
+.gallery-separator {
+  flex-shrink: 0;
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 0 0.25rem;
 }
 
 .gallery-item .gallery-label {
@@ -514,56 +523,93 @@ body {
   cursor: crosshair;
 }
 
-/* Power-up toolbar */
-.powerup-toolbar {
+/* Power-up bar (floating over canvas) */
+.powerup-bar {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 6;
+  pointer-events: auto;
+}
+
+.powerup-bar.visible {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
 }
 
-.powerup-btn {
+.powerup-icon-btn {
   position: relative;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 0.4rem 0.5rem;
-  border-radius: 4px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.6);
   cursor: pointer;
-  font-size: 0.8rem;
-  transition: background-color 0.2s, border-color 0.2s;
-  flex: 1;
-  min-width: 50px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
-.powerup-btn:hover:not(:disabled) {
-  border-color: var(--accent);
+.powerup-icon-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: white;
+  pointer-events: none;
 }
 
-.powerup-btn:disabled {
-  opacity: 0.4;
+.powerup-icon-btn:hover:not(:disabled) {
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.4);
+}
+
+.powerup-icon-btn:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
+  border-color: rgba(255,255,255,0.2);
 }
 
-.powerup-btn.active {
-  background: var(--accent-light);
-  border-color: var(--accent);
+.powerup-icon-btn.active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px white, 0 3px 12px rgba(0,0,0,0.4);
 }
 
-.powerup-badge {
+.powerup-icon-btn .powerup-badge {
   position: absolute;
   top: -4px;
   right: -4px;
-  background: var(--accent);
-  color: white;
+  background: white;
+  color: #333;
   font-size: 0.6rem;
-  min-width: 14px;
-  height: 14px;
-  border-radius: 7px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.powerup-icon-btn .powerup-label {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  color: white;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.powerup-icon-btn:hover .powerup-label {
+  opacity: 1;
 }
 
 /* Streak counter */
@@ -878,6 +924,21 @@ body {
     text-align: center;
     padding: 0.5rem;
     font-size: 0.8rem;
+  }
+
+  .powerup-bar {
+    left: 6px;
+    gap: 10px;
+  }
+
+  .powerup-icon-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .powerup-icon-btn svg {
+    width: 18px;
+    height: 18px;
   }
 
   .loader-screen {

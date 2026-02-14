@@ -8,20 +8,24 @@ import { Undo } from './undo.js';
 import { UI } from './ui.js';
 
 const powerups = {
-  reveal: { name: 'Reveal', icon: 'eye', charges: 1, description: 'Hover shows correct colors in 5x5 radius (10s)' },
-  bomb: { name: 'Bomb', icon: 'boom', charges: 0, description: 'Fill matching cells within radius 5' },
-  autofill: { name: 'Auto-Fill', icon: 'fill', charges: 0, description: 'Fill ALL remaining cells of selected color' },
-  flood: { name: 'Flood', icon: 'drop', charges: 1, description: 'Fill connected region of matching color' },
-  slowReveal: { name: 'Preview', icon: 'play', charges: 1, description: 'Cinematic preview of solution' },
+  reveal: { name: 'Reveal', color: '#4a90d9', charges: 1, description: 'Hover shows correct colors in 5x5 radius (10s)' },
+  bomb: { name: 'Bomb', color: '#e74c3c', charges: 0, description: 'Fill matching cells within radius 5' },
+  autofill: { name: 'Auto-Fill', color: '#4caf50', charges: 0, description: 'Fill ALL remaining cells of selected color' },
+  flood: { name: 'Flood', color: '#00acc1', charges: 1, description: 'Fill connected region of matching color' },
+};
+
+// SVG icon paths (viewBox 0 0 24 24)
+const iconSVGs = {
+  reveal: '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>',
+  bomb: '<circle cx="12" cy="13" r="7"/><path d="M12 6V2M14.5 4.5l2-2" stroke="white" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="14" cy="10" r="1.5" fill="rgba(255,255,255,0.5)"/>',
+  autofill: '<path d="M16 6l-2.29-2.29a1 1 0 00-1.42 0L4 12v4h4l8.29-8.29a1 1 0 000-1.42L16 6zM6 14l6-6 2 2-6 6H6v-2z"/><path d="M2 20h20v2H2z"/>',
+  flood: '<path d="M12 2c-1 3-6 7.2-6 11a6 6 0 0012 0c0-3.8-5-8-6-11z"/>',
 };
 
 let streak = 0;
 let revealActive = false;
 let revealTimer = null;
-let slowRevealActive = false;
-let slowRevealCancel = false;
-let toolbarEl = null;
-let sectionEl = null;
+let barEl = null;
 let streakEl = null;
 
 // Super streak tracking: detect completing all remaining cells of a color in one streak
@@ -29,9 +33,8 @@ let streakStartRemaining = null; // Uint32Array snapshot when streak began
 let powerUpColorCounts = null;   // Uint32Array — cells painted by power-ups per color (game-wide)
 
 export const PowerUps = {
-  init(toolbarElement, sectionElement, streakElement) {
-    toolbarEl = toolbarElement;
-    sectionEl = sectionElement;
+  init(barElement, streakElement) {
+    barEl = barElement;
     streakEl = streakElement;
 
     Bus.on('state:init', () => this.reset());
@@ -48,10 +51,8 @@ export const PowerUps = {
     powerups.bomb.charges = 0;
     powerups.autofill.charges = 0;
     powerups.flood.charges = 1;
-    powerups.slowReveal.charges = 1;
     streak = 0;
     revealActive = false;
-    slowRevealActive = false;
     streakStartRemaining = null;
     powerUpColorCounts = new Uint32Array(State.palette.length);
     State.activePowerUp = null;
@@ -61,33 +62,43 @@ export const PowerUps = {
   },
 
   buildToolbar() {
-    if (!toolbarEl) return;
-    toolbarEl.innerHTML = '';
-    sectionEl.style.display = '';
+    if (!barEl) return;
+    barEl.innerHTML = '';
+    barEl.classList.add('visible');
 
     for (const [key, pu] of Object.entries(powerups)) {
       const btn = document.createElement('button');
-      btn.className = 'powerup-btn';
+      btn.className = 'powerup-icon-btn';
       btn.dataset.powerup = key;
       btn.title = pu.description;
-      btn.textContent = pu.name;
+      btn.style.background = pu.color;
+
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.innerHTML = iconSVGs[key];
+      btn.appendChild(svg);
 
       const badge = document.createElement('span');
       badge.className = 'powerup-badge';
       badge.textContent = pu.charges.toString();
       btn.appendChild(badge);
 
+      const label = document.createElement('span');
+      label.className = 'powerup-label';
+      label.textContent = pu.name;
+      btn.appendChild(label);
+
       btn.addEventListener('click', () => this.activate(key));
-      toolbarEl.appendChild(btn);
+      barEl.appendChild(btn);
     }
 
     this.updateToolbar();
   },
 
   updateToolbar() {
-    if (!toolbarEl) return;
+    if (!barEl) return;
 
-    for (const btn of toolbarEl.querySelectorAll('.powerup-btn')) {
+    for (const btn of barEl.querySelectorAll('.powerup-icon-btn')) {
       const key = btn.dataset.powerup;
       const pu = powerups[key];
       const badge = btn.querySelector('.powerup-badge');
@@ -125,9 +136,6 @@ export const PowerUps = {
         State.activePowerUp = 'flood';
         UI.toast('Click a cell to flood-fill its connected region!', 'info');
         break;
-      case 'slowReveal':
-        this.activateSlowReveal();
-        break;
     }
 
     this.updateToolbar();
@@ -136,7 +144,6 @@ export const PowerUps = {
   deactivateAll() {
     if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
     revealActive = false;
-    slowRevealCancel = true;
     State.activePowerUp = null;
     Renderer.clearOverlay();
   },
@@ -375,54 +382,6 @@ export const PowerUps = {
     this.updateToolbar();
   },
 
-  // Slow Reveal: cinematic preview
-  async activateSlowReveal() {
-    powerups.slowReveal.charges--;
-    slowRevealActive = true;
-    slowRevealCancel = false;
-    State.activePowerUp = 'slowReveal';
-    this.updateToolbar();
-
-    UI.toast('Preview playing... click to stop', 'info');
-
-    const totalCells = State.totalCells;
-    const revealOrder = [];
-    for (let i = 0; i < totalCells; i++) {
-      if (State.currentColors[i] === -1) {
-        revealOrder.push(i);
-      }
-    }
-
-    // Shuffle for cinematic effect
-    for (let i = revealOrder.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [revealOrder[i], revealOrder[j]] = [revealOrder[j], revealOrder[i]];
-    }
-
-    const batchSize = Math.max(1, Math.floor(revealOrder.length / 100));
-    const delayMs = CONFIG.SLOW_REVEAL_DURATION / (revealOrder.length / batchSize);
-
-    const cells = [];
-    for (let i = 0; i < revealOrder.length && !slowRevealCancel; i += batchSize) {
-      const batch = [];
-      for (let j = i; j < Math.min(i + batchSize, revealOrder.length); j++) {
-        const idx = revealOrder[j];
-        const col = idx % State.gridWidth;
-        const row = (idx - col) / State.gridWidth;
-        batch.push({ row, col, colorIndex: State.targetColors[idx] });
-      }
-      cells.push(...batch);
-      Renderer.showOverlay(cells);
-      await new Promise(r => setTimeout(r, delayMs));
-    }
-
-    // Clean up
-    Renderer.clearOverlay();
-    slowRevealActive = false;
-    State.activePowerUp = null;
-    this.updateToolbar();
-  },
-
   // Streak tracking
   onCellPainted(colorIndex) {
     // Snapshot remaining counts when streak begins
@@ -515,11 +474,6 @@ export const PowerUps = {
     if (percent % 25 === 0) {
       powerups.flood.charges++;
       UI.toast('+1 Flood charge!', 'success');
-    }
-
-    // Slow Reveal: +1 at 25%
-    if (percent === 25) {
-      powerups.slowReveal.charges++;
     }
 
     this.updateToolbar();

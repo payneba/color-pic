@@ -46,8 +46,21 @@ function loadImage(src) {
   });
 }
 
-async function processImage(source) {
+function applySettings(settings) {
+  if (!settings) return;
+  if (settings.cells) {
+    gridSizeInput.value = settings.cells;
+    gridSizeValue.textContent = parseInt(settings.cells).toLocaleString() + ' cells';
+  }
+  if (settings.colors) {
+    numColorsInput.value = settings.colors;
+    numColorsValue.textContent = settings.colors;
+  }
+}
+
+async function processImage(source, settings) {
   hideError();
+  applySettings(settings);
   processingIndicator.classList.remove('hidden');
   previewSection.classList.add('hidden');
 
@@ -189,8 +202,7 @@ export function boot() {
   Storage.init();
   Gallery.init(document.getElementById('galleryStrip'));
   PowerUps.init(
-    document.getElementById('powerupToolbar'),
-    document.getElementById('powerupSection'),
+    document.getElementById('powerupBar'),
     document.getElementById('streakDisplay')
   );
   Audio.init();
@@ -384,6 +396,11 @@ export function boot() {
   // Expose processImage for gallery
   window._processImage = processImage;
   window._startGame = startGame;
+
+  // Auto-load default gallery image
+  window._loadDefaultImage = (url, settings) => {
+    processImage(url, settings);
+  };
 
   // Show loader screen
   UI.showScreen('loader');
